@@ -1,86 +1,319 @@
-# ECONNECT – Community Clean-Up & Cause Coordinator (Spring Boot backend)
+# ECONNECT – Community Clean-Up & Cause Coordinator
 
-Maven project generated from the ECONNECT abstract.
-Stack: Java 17 · Spring Boot 3.2 · Maven · Spring Web · Spring Data JPA / Hibernate · Bean Validation · Spring Security (BCrypt) · MySQL.
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Netlify-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://econnect-au.netlify.app/)
+[![Backend](https://img.shields.io/badge/Backend-Spring%20Boot%203.2-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://econnect-au.netlify.app/)
+[![Database](https://img.shields.io/badge/Database-Aiven%20MySQL%208-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://econnect-au.netlify.app/)
+[![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://econnect-au.netlify.app/)
 
-Architecture: `React → REST controller → service layer → JPA repository → MySQL`
+> **Live Website:** [https://econnect-au.netlify.app/](https://econnect-au.netlify.app/)  
+> **Backend Service:** Hosted on Render (Spring Boot 3.2 Java 17 REST API)  
+> **Database:** Aiven Cloud MySQL 8
 
-## Project Structure
-- `backend/` – Spring Boot 3.2 backend (Maven, Java 17, JPA, MySQL)
-- `frontend/` – React 18 + Vite frontend (Netlify deployment)
+---
 
-## Run
-### Backend:
-1. Install JDK 17+ and Maven 3.9+. (IDE: enable Lombok annotation processing.)
-2. Start MySQL. Defaults: `root` / `root` on `localhost:3306`; the `econnect` database is created automatically.
-   Override with env vars `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`.
-3. `cd backend && mvn spring-boot:run`  → API on http://localhost:8080
-4. `cd backend && mvn clean package`    → runs tests (H2 in-memory) and builds `backend/target/econnect-1.0.0.jar`
+## 📖 Table of Contents
+1. [Executive Overview](#-executive-overview)
+2. [Why ECONNECT is Beneficial](#-why-econnect-is-beneficial)
+3. [How the Entire Project Works](#-how-the-entire-project-works)
+   - [System Architecture](#system-architecture)
+   - [End-to-End Workflow](#end-to-end-workflow)
+   - [Core Features & Modules](#core-features--modules)
+4. [Monorepo Project Structure](#-monorepo-project-structure)
+5. [Getting Started (Run Locally)](#-getting-started-run-locally)
+   - [Prerequisites](#prerequisites)
+   - [Backend Setup](#backend-setup)
+   - [Frontend Setup](#frontend-setup)
+   - [Docker Compose](#docker-compose-setup)
+6. [Deployment Architecture](#-deployment-architecture)
+   - [Render (Backend Web Service)](#render-backend)
+   - [Netlify (Frontend Web App)](#netlify-frontend)
+   - [Aiven Cloud MySQL](#aiven-cloud-mysql)
+7. [API Endpoints Reference](#-api-endpoints-reference)
+8. [Business Rules & Security](#-business-rules--security)
 
-### Frontend:
-1. `cd frontend && npm install`
-2. `npm run dev`                        → Web app on http://localhost:5173
+---
 
-Tables are created by Hibernate (`ddl-auto=update`); the six badges are seeded on first start.
+## 🌟 Executive Overview
 
-## Authentication
-`POST /api/auth/register` and `POST /api/auth/login` return the user profile.
-Passwords are BCrypt-hashed. All other protected calls send the same email/password as
-**HTTP Basic** (`Authorization: Basic base64(email:password)`) — stateless, role-based (`VOLUNTEER`, `ORGANIZER`).
-CORS allows `http://localhost:3000` and `:5173` (edit `econnect.cors.allowed-origins`).
+**ECONNECT** is a full-stack, community-driven social and environmental coordination platform. It bridges the gap between passionate volunteers and grassroots civic organizers by centralizing cause discovery, real-time coordination, verified impact auditing, and gamified recognition.
 
-## Endpoints
-| Area | Endpoints |
-|---|---|
-| Auth | `POST /api/auth/register`, `POST /api/auth/login` |
-| Users | `GET/PUT /api/users/{id}`, `GET /api/users/{id}/statistics`, `GET /api/users/{id}/badges`, `GET /api/users/me/participations` |
-| Events | `GET /api/events?q=&type=&location=&date=&status=&lat=&lng=&radiusKm=`, `GET /api/events/map`, `GET /api/events/featured`, `GET /api/events/mine`, `GET /api/events/{id}`, `POST /api/events`, `PUT /api/events/{id}`, `DELETE /api/events/{id}`, `GET /api/events/{id}/statistics` |
-| Participation | `POST /api/events/{id}/join`, `DELETE /api/events/{id}/leave`, `GET /api/events/{id}/participants`, `PUT /api/participation/{id}/attendance` |
-| Chat | `GET /api/events/{id}/chat?afterId={lastId}`, `POST /api/events/{id}/chat`, `DELETE /api/chat/{messageId}`, `PUT /api/chat/{messageId}/pin` |
-| Impact | `POST /api/events/{id}/impact`, `GET /api/events/{id}/impact`, `PUT /api/impact/{id}/verify` |
-| Stats / badges | `GET /api/stats/community`, `GET /api/organizers/{id}/statistics`, `GET /api/badges` |
+Traditional volunteer recruitment often suffers from fragmented communication (spreadsheets, messaging groups, paper forms), vague reporting, and low volunteer retention. ECONNECT solves this by providing a unified digital workspace featuring:
+* **Interactive Map & Distance Discovery:** Pinpoint causes on OpenStreetMap tiles with geolocation filtering.
+* **Controlled Participation & Attendance:** Atomic registration with database locks and attendance verification.
+* **Context-Driven Group Chat:** Dedicated, spam-protected in-event chat with pinned organizer announcements.
+* **Audited Environmental Impact:** Proof-based impact logs (kg of waste cleaned, trees planted) with organizer verification.
+* **Gamification & Verifiable Credentials:** Tiered leveling, milestone badges, public leaderboards, and verifiable digital certificates.
 
-## Business rules (all in the Java service layer)
-- Duplicate email rejected; one `event_participants` row per (event, user) (also a DB unique constraint).
-- Join: volunteer only, event must be `UPCOMING`, rejected when full (event row is locked while counting active registrations). Leaving sets participation to `CANCELLED`; rejoining reuses the row.
-- Attendance (`PRESENT`/`ABSENT`) by the owning organizer only. `PRESENT` → **+10** points (once). When the event becomes `COMPLETED`, PRESENT volunteers become `COMPLETED` → **+20** points (once).
-- Levels from total points: Beginner 0 · Active Volunteer 30 · Community Helper 90 · Green Champion 150 · Eco Warrior 240 · Community Hero 360 (edit `VolunteerLevel`).
-- Badges (stored in `user_badges`): First Step (1 completed) · Community Helper (3) · Green Champion (2 environmental events) · Eco Warrior (50 verified kg/trees) · Cause Leader (5) · Community Hero (10 completed + 300 pts). Edit `GamificationService`.
-- Impact is `PENDING` when recorded; the event owner marks it `VERIFIED`/`REJECTED`. Only `VERIFIED` rows reach public event pages, dashboards, profile totals and badges.
-- Delete policy: events with registrations/impact are marked `CANCELLED`; empty events are deleted.
-- Chat: `chat_messages` table indexed on `(event_id, id)`. `canAccessChat(event, user)` restricts access to the organizer and REGISTERED/COMPLETED volunteers (403 for outsiders). Cancelled events are read-only. Organizer only can pin announcements and delete any message; senders can soft delete their own messages. Rate limit: max 10 messages/minute per event per user.
-- Location & Map Discovery: `latitude` and `longitude` are DECIMAL(9,6) (-90..90, -180..180). Both or neither must be provided. `GET /api/events` supports distance filtering (`lat`, `lng`, `radiusKm` max 200) using the Haversine formula, returning results sorted by ascending distance with `distanceKm`. `GET /api/events/map` provides a lightweight pin payload for upcoming geolocated events.
-- All dashboard numbers are queried from the database — nothing hardcoded.
+---
 
-## Architecture Notes
-### Feature 1 - Event Group Chat & Announcements
-- **Backend**: `ChatMessage` entity with table `chat_messages` indexed on `(event_id, id)`. Access controlled in `ChatService.canAccessChat(event, user)` which enforces that only the event organizer and registered/completed volunteers can view and post messages. Anti-spam counts user messages in the last 60 seconds (`countByEventIdAndSenderIdAndCreatedAtAfter`).
-- **Endpoints**: `GET /api/events/{id}/chat?afterId={lastId}` (returns messages > afterId ordered oldest-first, plus pinned announcements on initial load), `POST /api/events/{id}/chat`, `DELETE /api/chat/{messageId}` (soft delete: sets `deleted=true` and `content="Message removed"`), `PUT /api/chat/{messageId}/pin` (organizer pin toggle).
-- **Frontend**: `EventChat.jsx` integrated inside `EventDetail.jsx` (under the "Group Chat" tab and directly at `/events/:id/chat`), and accessible from "Chat" buttons on `JoinedEvents.jsx` (`/my-events`). Automatically polls with `afterId` every 4s, pauses when the browser tab is hidden using the Page Visibility API, and backs off to 10s after 2 minutes of inactivity. Features message bubbles, optimistic delivery with error rollback, auto-scroll with "New messages" jump pill, collapsible pinned announcements banner, and accessibility tags (`role="log"`, `aria-live="polite"`).
+## 💡 Why ECONNECT is Beneficial
 
-### Feature 2 - Map-Based Event Discovery (Leaflet + OpenStreetMap)
-- **Backend**: Added `latitude` and `longitude` (DECIMAL(9,6)) to `Event`. Added validation and coordinate pair constraint ("both or neither") in `EventService`. Implemented Haversine formula in `EventService.haversineKm` to calculate spherical distance cleanly across both MySQL and H2 databases. Added `GET /api/events/map` public endpoint returning `EventMapPinResponse` (`id`, `title`, `eventType`, `latitude`, `longitude`, `eventDate`, `status`, `remainingSlots`) and distance filtering (`lat, lng, radiusKm` capped at 200 km) on `GET /api/events`.
-- **Frontend**: Integrated `leaflet` and `react-leaflet@^4.2.1` using lazy-loading (`React.lazy`) with `Suspense` fallback. Built `EventsMap.jsx` with OpenStreetMap tiles, custom SVG color-coded pins matching event category themes, auto-bounds fitting, interactive popups, and empty state overlays. Added a List / Map toggle on `EventsDiscover.jsx` preserving filter state, alongside a "Near Me" geolocation search with 5 / 10 / 25 / 50 km radius selector. Added `LocationPickerMap.jsx` to `EventForm.jsx` (click/drag marker or use browser geolocation) and embedded `EventStaticMap.jsx` on `EventDetail.jsx` with an OpenStreetMap directions link.
+### 1. For Volunteers
+* **Hyper-Local Discovery:** Use the interactive map and "Near Me" radius filters (5–50 km) to discover cleanup drives and social causes happening directly in their neighborhood.
+* **Tangible Motivation & Gamification:** Gain 10 points for verified attendance and 20 points upon event completion. Level up across 6 volunteer tiers (from *Beginner* to *Community Hero*) and unlock merit badges.
+* **Verifiable Digital Credentials:** Earn tamper-proof digital certificates of participation with unique certificate IDs, ideal for academic community service credits, resumes, and LinkedIn.
+* **Safe, Focused Communication:** Directly communicate with event organizers and fellow volunteers in an isolated, secure event chat without having to share personal phone numbers.
 
-## Manual Demo Scripts
-### Demo Script 1: Feature 1 (Group Chat & Announcements)
-1. **Log in as an Organizer**: Register or log in with an `ORGANIZER` account (e.g. `org@test.com` / `secret123`). Create a new upcoming event or locate an existing one.
-2. **Access Group Chat**: Click "View Details" on the event, then click the **Group Chat** tab (or navigate to `/events/{id}/chat`). Post a message as the organizer with the **"Post as Pinned Announcement"** checkbox checked. Verify the message appears in both the chat feed and the collapsible pinned banner at the top.
-3. **Register and Join as Volunteer**: In an incognito window, log in as a `VOLUNTEER` account. Before joining, visit `/events/{id}/chat` and verify the friendly locked state explaining that the user must join the event. Click **Join Event Now**.
-4. **Chat Interaction & Polling**: As the volunteer, post a message. Switch to the organizer window and watch the volunteer's message appear within 4 seconds via automatic polling without page refresh. Post a reply from the organizer.
-5. **Pin & Delete Controls**: Notice the organizer can toggle the Pin icon on any message and delete messages (which replaces the text with "Message removed"). Notice the volunteer can delete their own message but cannot pin or delete organizer messages.
+### 2. For Organizers
+* **Elimination of Administrative Overhead:** Replace messy spreadsheets and WhatsApp groups with a unified dashboard to publish events, track volunteer caps, and monitor live attendance.
+* **Live Broadcasts & Anti-Spam Chat:** Pin critical announcements (gear instructions, meetup points) at the top of the event feed, with built-in rate-limiting and message moderation.
+* **Verified Social Impact Reporting:** Review and audit participant claims (kg of trash collected, trees planted) before they count toward public event records, ensuring credibility for sponsors and donors.
+* **Automated Data Insights:** Instant statistics on volunteer turnout rate, completed causes, and cumulative environmental impact metrics.
 
-### Demo Script 2: Feature 2 (Map-Based Event Discovery)
-1. **Create Geolocated Event**: Log in as an Organizer and navigate to `/organizer/events/new` ("Create Event"). Fill in event details and scroll to the location map. Click on the map or click "Use my current location" to place the pin (e.g., in your city), then click "Create Event".
-2. **Discover on Map**: Navigate to **Discover Events** (`/events`). Notice the **List / Map** segmented control toggle at the top right of the search area. Click **Map**.
-3. **Explore Map Pins & Popups**: Verify the interactive Leaflet map renders with OpenStreetMap tiles and automatically fits bounds to visible events. Observe color-coded pins categorized by event type. Click on an event pin to view the popup showing title, date, available slots, and a "View details" button.
-4. **Test "Near Me" Geolocation & Radius Filter**: Click the **Near me** button. Accept the browser location prompt or pick a radius (e.g. 25 km). Observe the event list and map refresh with distance calculations, displaying badges like "12.4 km away" on the event cards sorted by closest distance.
-5. **Check Event Detail Mini-Map**: Click on a geolocated event to open its detail page (`/events/:id`). In the sidebar, verify the mini interactive map displays the event pin with coordinates and includes a direct **"Get directions"** link opening OpenStreetMap directions.
+### 3. For Communities & the Environment
+* **Data-Backed Environmental Action:** Aggregates real metrics—measuring hundreds of kilograms of removed plastic or trees planted rather than vague estimates.
+* **Sustained Civic Engagement:** Automated gamification mechanisms convert one-time volunteers into lifelong community advocates.
 
-## Error format
-`{ timestamp, status, error, message, fieldErrors }` — 400 validation, 401 bad credentials, 403 forbidden, 404 not found, 409 business-rule conflict.
+---
 
-## Layout
-`controller · service · repository · entity · dto · exception · config` under `com.econnect`.
+## ⚙️ How the Entire Project Works
 
+### System Architecture
 
+```
+┌───────────────────────────────────────────────────────────────────┐
+│               React 18 + Vite Frontend (Netlify)                  │
+│       [https://econnect-au.netlify.app/]                         │
+│                                                                   │
+│  • React Router 6       • Leaflet + OpenStreetMap Map Discovery   │
+│  • Lucide React Icons   • Responsive Dark/Light Design Tokens     │
+│  • Polling Event Chat   • Verifiable Digital Certificate Engine   │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │  REST API / JSON / HTTP Basic Auth
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│           Spring Boot 3.2 Java 17 Backend (Render)                │
+│                                                                   │
+│  • Spring Web (REST)    • Spring Security (BCrypt + Basic Auth)   │
+│  • Service Layer Rules  • JPA / Hibernate ORM Layer               │
+│  • Haversine Distance   • Gamification & Milestone Evaluator      │
+└─────────────────────────────────┬─────────────────────────────────┘
+                                  │  JDBC (SSL Required)
+                                  ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                Aiven Cloud MySQL 8 Managed Database               │
+│                                                                   │
+│  • Users & Roles        • Events & Geolocations (DECIMAL 9,6)     │
+│  • Participations       • Chat Messages with Event Indexes        │
+│  • Impact Logs          • User Badges & Leaderboard Aggregates    │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### End-to-End Workflow
+
+1. **Authentication & Roles:**  
+   Users register as either a `VOLUNTEER` or an `ORGANIZER`. Passwords are encrypted using BCrypt. Authenticated requests use stateless HTTP Basic Authentication.
+2. **Event Creation & Geolocation:**  
+   Organizers create events specifying title, date, capacity, category (`CLEANUP`, `TREE_PLANTING`, `FOOD_DRIVE`, `EDUCATION`, `ANIMAL_WELFARE`, `OTHER`), and map coordinates. Coordinates are stored with `DECIMAL(9,6)` precision.
+3. **Discovery & Radius Search:**  
+   Volunteers explore events via a searchable list or an interactive Leaflet map. Using the browser's Geolocation API, the backend calculates spherical distances using the mathematical **Haversine formula** to return sorted events within the specified radius.
+4. **Registration & Slot Locking:**  
+   When a volunteer joins an event, the backend verifies capacity under transaction locks to prevent race conditions. Duplicate registrations are rejected.
+5. **Real-Time Group Chat:**  
+   Confirmed attendees and the organizer access a dedicated group chat. The frontend polls messages (`afterId`) every 4 seconds, pauses polling when the browser tab is hidden (Page Visibility API), and backs off during inactivity.
+6. **Attendance & Point Allocation:**  
+   During the event, the organizer marks volunteer attendance (`PRESENT` or `ABSENT`). Marking attendance awards **+10 points**.
+7. **Event Completion & Bonus Points:**  
+   When the event is marked `COMPLETED`, present volunteers receive **+20 bonus points** and automatic eligibility for certificates.
+8. **Impact Logging & Verification:**  
+   Volunteers submit impact metrics (e.g. 15 kg plastic collected). The entry remains `PENDING` until the organizer reviews and marks it `VERIFIED`. Only verified impact updates user stats and community dashboards.
+9. **Gamification & Badges:**  
+   The `GamificationService` checks for badge milestones (e.g., *First Step*, *Community Helper*, *Eco Warrior*) and adjusts volunteer rank levels accordingly.
+10. **Digital Certificate Verification:**  
+    Volunteers view and print high-resolution certificates. Each certificate includes a verification link and unique code verifiable publicly at `/certificates/verify`.
+
+---
+
+## 📁 Monorepo Project Structure
+
+```
+claudeEconnect/econnect/
+├── backend/                       # Spring Boot 3.2 Java 17 Backend
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/econnect/
+│   │   │   │   ├── config/        # Security, Initializers, Constants
+│   │   │   │   ├── controller/    # REST Controllers
+│   │   │   │   ├── dto/           # Request & Response DTOs
+│   │   │   │   ├── entity/        # JPA Entities (User, Event, Chat, etc.)
+│   │   │   │   ├── exception/     # Global exception handler & error formats
+│   │   │   │   ├── repository/    # Spring Data JPA Repositories
+│   │   │   │   └── service/       # Business logic, Gamification, Chat
+│   │   │   └── resources/
+│   │   │       └── application.properties
+│   │   └── test/                  # Integration tests (H2 in-memory DB)
+│   ├── pom.xml                    # Maven build configuration
+│   ├── Dockerfile                 # Multi-stage container build
+│   └── .dockerignore
+│
+├── frontend/                      # React 18 + Vite Frontend
+│   ├── src/
+│   │   ├── components/            # Reusable UI (Buttons, Cards, Modals, Maps)
+│   │   │   └── map/               # Leaflet maps (Discovery, Pickers, Static)
+│   │   ├── context/               # AuthContext, ThemeContext
+│   │   ├── hooks/                 # Custom React hooks (useApi, debounce)
+│   │   ├── lib/                   # API client, route helpers, leafletSetup
+│   │   ├── pages/                 # Full screens (Home, Discover, Chat, Dashboard)
+│   │   └── styles/                # CSS design system (tokens, components)
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── netlify.toml               # Netlify build & rewrite configuration
+│
+├── docker-compose.yml             # Orchestration for local containerized backend
+├── .gitignore                     # Workspace ignore rules
+└── README.md                      # Complete project documentation
+```
+
+---
+
+## 🚀 Getting Started (Run Locally)
+
+### Prerequisites
+* **Java 17+** (JDK 17 or higher)
+* **Apache Maven 3.9+**
+* **Node.js 18+** & **npm**
+* **MySQL 8** (or Docker for database)
+
+---
+
+### Backend Setup
+
+1. Open a terminal and navigate to the `backend/` directory:
+   ```bash
+   cd backend
+   ```
+2. Configure database credentials in `backend/src/main/resources/application.properties` or set environment variables:
+   ```bash
+   export DB_URL="jdbc:mysql://localhost:3306/econnect?createDatabaseIfNotExist=true"
+   export DB_USERNAME="root"
+   export DB_PASSWORD="yourpassword"
+   ```
+3. Run the Spring Boot application:
+   ```bash
+   mvn spring-boot:run
+   ```
+4. The REST API will start at: `http://localhost:8080`
+
+To build and run tests:
+```bash
+mvn clean package
+```
+
+---
+
+### Frontend Setup
+
+1. Open another terminal and navigate to the `frontend/` directory:
+   ```bash
+   cd frontend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server (configured to proxy `/api` calls to `http://localhost:8080`):
+   ```bash
+   npm run dev
+   ```
+4. Access the web application at: `http://localhost:5173`
+
+---
+
+### Docker Compose Setup
+
+To run the containerized backend locally:
+```bash
+docker-compose up --build
+```
+
+---
+
+## ☁️ Deployment Architecture
+
+### Render (Backend)
+* **Service Type:** Web Service (Docker or Native Java)
+* **GitHub Repository:** Connected to `main` branch
+* **Root Directory:** `backend` *(Crucial: must be set to `backend` in Render Dashboard -> Settings)*
+* **Environment Variables:**
+  * `PORT`: `8080` (managed by Render)
+  * `DB_URL`: JDBC connection URL to cloud MySQL
+  * `DB_USERNAME`: Database username
+  * `DB_PASSWORD`: Database password
+  * `ECONNECT_CORS_ALLOWED_ORIGINS`: `https://econnect-au.netlify.app,https://playful-mochi-dec0b3.netlify.app`
+
+### Netlify (Frontend)
+* **Live URL:** [https://econnect-au.netlify.app/](https://econnect-au.netlify.app/)
+* **Base Directory:** `frontend`
+* **Build Command:** `npm run build`
+* **Publish Directory:** `dist`
+* **Environment Variables:**
+  * `VITE_API_BASE`: Public URL of your deployed Render backend (e.g. `https://<your-render-app>.onrender.com/api`)
+
+### Aiven Cloud MySQL
+* Hosted MySQL 8 database with SSL enforced (`sslMode=REQUIRED`).
+* Automatically initializes and updates tables via Hibernate (`ddl-auto=update`).
+* Default gamification badges seeded on first boot by `DataInitializer.java`.
+
+---
+
+## 📡 API Endpoints Reference
+
+| Module | Method | Endpoint | Description |
+|---|---|---|---|
+| **Auth** | `POST` | `/api/auth/register` | Register a new Volunteer or Organizer |
+| | `POST` | `/api/auth/login` | Authenticate user and return profile details |
+| **Users** | `GET` | `/api/users/{id}` | Get user profile |
+| | `PUT` | `/api/users/{id}` | Update bio and avatar |
+| | `GET` | `/api/users/{id}/statistics` | Get user impact and event stats |
+| | `GET` | `/api/users/{id}/badges` | Get user earned badges |
+| | `GET` | `/api/users/me/participations`| Get current user joined events |
+| **Events** | `GET` | `/api/events` | Filter events by query, type, date, radius |
+| | `GET` | `/api/events/map` | Lightweight coordinates pin payload |
+| | `GET` | `/api/events/featured` | Get featured upcoming causes |
+| | `GET` | `/api/events/mine` | Get events created by logged-in organizer |
+| | `GET` | `/api/events/{id}` | Get complete event details |
+| | `POST` | `/api/events` | Create new cause (Organizer only) |
+| | `PUT` | `/api/events/{id}` | Update event details (Organizer only) |
+| | `DELETE` | `/api/events/{id}` | Cancel/delete event (Organizer only) |
+| **Participation**| `POST` | `/api/events/{id}/join` | Register for an upcoming event |
+| | `DELETE` | `/api/events/{id}/leave`| Cancel registration |
+| | `GET` | `/api/events/{id}/participants`| View attendee list |
+| | `PUT` | `/api/participation/{id}/attendance`| Mark attendance `PRESENT`/`ABSENT` |
+| **Chat** | `GET` | `/api/events/{id}/chat?afterId=`| Fetch chat messages and pinned posts |
+| | `POST` | `/api/events/{id}/chat` | Post a new message or announcement |
+| | `DELETE` | `/api/chat/{messageId}` | Soft delete a message |
+| | `PUT` | `/api/chat/{messageId}/pin` | Pin/unpin announcement (Organizer only)|
+| **Impact** | `POST` | `/api/events/{id}/impact`| Submit impact record for verification |
+| | `GET` | `/api/events/{id}/impact` | View event impact metrics |
+| | `PUT` | `/api/impact/{id}/verify`| Approve (`VERIFIED`) or reject impact |
+| **Gamification**| `GET` | `/api/badges` | List all system badges |
+| | `GET` | `/api/leaderboard` | View top volunteers (global/monthly) |
+| | `GET` | `/api/certificates/{id}` | Generate digital participation certificate|
+| | `GET` | `/api/certificates/verify/{code}`| Publicly verify certificate authenticity|
+| **Statistics** | `GET` | `/api/stats/community` | Global platform metrics summary |
+| | `GET` | `/api/organizers/{id}/statistics`| Organizer track record and verified reach |
+
+---
+
+## 🔒 Business Rules & Security
+
+* **Stateless Authentication:** Passwords hashed with BCrypt; all protected endpoints use stateless HTTP Basic Authentication.
+* **Role-Based Authorization:** Strict separation between `VOLUNTEER` and `ORGANIZER` roles enforced at the Spring Security filter and service layers.
+* **Concurrency Protection:** Database row locking prevents over-subscription past the maximum attendee capacity.
+* **Spam Prevention:** Chat endpoint enforces a rate limit of 10 messages per minute per user per event. Outsiders receive `403 Forbidden`.
+* **Audit Trail:** Impact records require organizer verification before appearing in public totals or affecting leaderboards.
+* **Standardized Errors:** Unified JSON error envelope:
+  ```json
+  {
+    "timestamp": "2026-10-12T19:30:00Z",
+    "status": 400,
+    "error": "Bad Request",
+    "message": "Event is already at full capacity",
+    "fieldErrors": {}
+  }
+  ```
+
+---
+
+*Made with ❤️ for communities and a cleaner planet.*
