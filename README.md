@@ -5,12 +5,21 @@ Stack: Java 17 · Spring Boot 3.2 · Maven · Spring Web · Spring Data JPA / Hi
 
 Architecture: `React → REST controller → service layer → JPA repository → MySQL`
 
+## Project Structure
+- `backend/` – Spring Boot 3.2 backend (Maven, Java 17, JPA, MySQL)
+- `frontend/` – React 18 + Vite frontend (Netlify deployment)
+
 ## Run
+### Backend:
 1. Install JDK 17+ and Maven 3.9+. (IDE: enable Lombok annotation processing.)
 2. Start MySQL. Defaults: `root` / `root` on `localhost:3306`; the `econnect` database is created automatically.
    Override with env vars `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`.
-3. `mvn spring-boot:run`  → API on http://localhost:8080
-4. `mvn clean package`    → runs tests (H2 in-memory) and builds `target/econnect-1.0.0.jar`
+3. `cd backend && mvn spring-boot:run`  → API on http://localhost:8080
+4. `cd backend && mvn clean package`    → runs tests (H2 in-memory) and builds `backend/target/econnect-1.0.0.jar`
+
+### Frontend:
+1. `cd frontend && npm install`
+2. `npm run dev`                        → Web app on http://localhost:5173
 
 Tables are created by Hibernate (`ddl-auto=update`); the six badges are seeded on first start.
 
