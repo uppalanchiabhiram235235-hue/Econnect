@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: econnect-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_URL=jdbc:mysql://mysql-32b873e3-uppalanchiabhiram235235-f060.e.aivencloud.com:23580/defaultdb?sslMode=REQUIRED
+      - DB_USERNAME=avnadmin
+      - DB_PASSWORD=${DB_PASSWORD}
+    restart: unless-stopped
