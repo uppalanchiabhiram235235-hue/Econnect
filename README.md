@@ -127,7 +127,7 @@ Traditional volunteer recruitment often suffers from fragmented communication (s
 ## 📁 Monorepo Project Structure
 
 ```
-claudeEconnect/econnect/
+Econnect/
 ├── backend/                       # Spring Boot 3.2 Java 17 Backend
 │   ├── src/
 │   │   ├── main/
